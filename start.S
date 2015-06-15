@@ -37,6 +37,7 @@ _start:
 	blo 1b
  
 	// Call the kernel
+	mov fp, #0
 	ldr r3, =kernel
 	blx r3
  
