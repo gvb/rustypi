@@ -6,13 +6,13 @@ CROSS_COMPILE=arm-none-eabi-
 CC=$(CROSS_COMPILE)gcc
 OBJCOPY=$(CROSS_COMPILE)objcopy
 
-SFLAGS=-mcpu=arm1176jzf-s -fpic -ffreestanding
-CFLAGS=$(SFLAGS) -std=gnu99
+SFLAGS=-mcpu=arm1176jzf-s -mthumb -fpic -ffreestanding
+CFLAGS=$(SFLAGS) -O1 -Wall -Wextra -std=gnu99 
 
 RUST=rustc
 RSFLAGS=-C opt-level=1 -Z no-landing-pads --target thumbv6-none-eabi -g --emit obj -L libcore-thumbv6
 
-.PHONY : clean
+.PHONY : all clean
 
 all :  kernel.img
 
@@ -23,8 +23,8 @@ start.o : start.S
 	$(CC) $(SFLAGS) -c $^ -o $@
 
 # C kernel
-#kernel.o : kernel.c
-#	$(CC) $(CFLAGS) -c $^ -o $@ -O1 -Wall -Wextra
+ckernel.o : ckernel.c
+	$(CC) $(CFLAGS) -c $^ -o $@
 
 # Pure Rust kernel
 kernel.o : kernel.rs
