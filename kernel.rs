@@ -44,65 +44,25 @@ pub fn panic_fmt(_fmt: &core::fmt::Arguments, _file_line: &(&'static str, usize)
 
 #[no_mangle]
 pub unsafe fn __aeabi_unwind_cpp_pr0() -> () {
-    unsafe {
-        asm!("1: b 1b\n" :::: "volatile");
-    }
+    asm!("1: b 1b\n" :::: "volatile");
 }
 
 #[no_mangle]
 pub unsafe fn __aeabi_unwind_cpp_pr1() -> () {
-    unsafe {
-        asm!("1: b 1b\n" :::: "volatile");
-    }
+    asm!("1: b 1b\n" :::: "volatile");
 }
+
+use core::str::StrExt;
 
 /****************************************************************************
  * Define the memory map
  ***************************************************************************/
 
 enum MemMap {
-    GPIO_BASE = 0x20200000,
-    UART0_BASE = 0x20201000,
+    GpioBase = 0x20200000,
+    Uart0Base = 0x20201000,
 }
  
-enum GpioMemMap {
-    // Controls actuation of pull up/down to ALL GPIO pins.
-    GPPUD = 0x94,
- 
-    // Controls actuation of pull up/down for specific GPIO pin.
-    GPPUDCLK0 = 0x98,
-}
- 
-enum UartMemMap {
- 
-    // The offsets for reach register for the UART.
-    UART0_DR      = 0x00,
-    UART0_RSRECR  = 0x04,
-    UART0_FR      = 0x18,
-    UART0_ILPR    = 0x20,
-    UART0_IBRD    = 0x24,
-    UART0_FBRD    = 0x28,
-    UART0_LCRH    = 0x2C,
-    UART0_CR      = 0x30,
-    UART0_IFLS    = 0x34,
-    UART0_IMSC    = 0x38,
-    UART0_RIS     = 0x3C,
-    UART0_MIS     = 0x40,
-    UART0_ICR     = 0x44,
-    UART0_DMACR   = 0x48,
-    UART0_ITCR    = 0x80,
-    UART0_ITIP    = 0x84,
-    UART0_ITOP    = 0x88,
-    UART0_TDR     = 0x8C,
-}
- 
-/*
- * Convenience macro to take a base address and register enum and turn
- * them into a u32 address.
- */
-macro_rules! toAddr {
-    ($base:expr, $reg:expr) => ($base as u32 + $reg as u32)
-}
 
 /****************************************************************************
  * Some utility functions to make the compiler do what needs to be done.
@@ -142,77 +102,130 @@ unsafe fn mmio_read(reg: u32) -> u32 {
 }
  
 /****************************************************************************
- * UART
+ * GPIO - General Purpose Input / Output
  ***************************************************************************/
 
-unsafe fn uart_init() {
-    // Disable UART0.
-    mmio_write(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_CR),
-               0x00000000);
-    // Setup the GPIO pin 14 && 15.
+enum GpioMemMap {
+    // Controls actuation of pull up/down to ALL GPIO pins.
+    GPPUD = 0x94,
  
-    // Disable pull up/down for all GPIO pins & delay for 150 cycles.
-    mmio_write(toAddr!(MemMap::GPIO_BASE, GpioMemMap::GPPUD),
-               0x00000000);
-    delay(150);
+    // Controls actuation of pull up/down for specific GPIO pin.
+    GPPUDCLK0 = 0x98,
+}
  
-    // Disable pull up/down for pin 14,15 & delay for 150 cycles.
-    mmio_write(toAddr!(MemMap::GPIO_BASE, GpioMemMap::GPPUDCLK0),
-               (1 << 14) | (1 << 15));
-    delay(151);
- 
-    // Write 0 to GPPUDCLK0 to make it take effect.
-    mmio_write(toAddr!(MemMap::GPIO_BASE, GpioMemMap::GPPUDCLK0),
-               0x00000000);
- 
-    // Clear pending interrupts.
-    mmio_write(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_ICR),
-               0x7FF);
- 
-    // Set integer & fractional part of baud rate.
-    // Divider = UART_CLOCK/(16 * Baud)
-    // Fraction part register = (Fractional part * 64) + 0.5
-    // UART_CLOCK = 3000000; Baud = 115200.
- 
-    // Divider = 3000000 / (16 * 115200) = 1.627 = ~1.
-    // Fractional part register = (.627 * 64) + 0.5 = 40.6 = ~40.
-    mmio_write(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_IBRD), 1);
-    mmio_write(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_FBRD), 40);
- 
-    // Enable FIFO & 8 bit data transmissio (1 stop bit, no parity).
-    mmio_write(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_LCRH),
-               (1 << 4) | (1 << 5) | (1 << 6));
- 
-    // Mask all interrupts.
-    mmio_write(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_IMSC),
-               (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) |
-               (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10));
- 
-    // Enable UART0, receive & transfer part of UART.
-    mmio_write(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_CR),
-               (1 << 0) | (1 << 8) | (1 << 9));
+struct Gpio {
+    base_addr: u32
 }
 
-unsafe fn uart_putc(byte: u8) {
-    // Wait for UART to become ready to transmit.
-    while mmio_read(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_FR)) & (1 << 5) != 0 {
-    }
-    mmio_write(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_DR),
-               byte as u32);
-}
+impl Gpio {
+
+    // TODO: Verify operation and comment
+    unsafe fn init(&self) {
+        mmio_write(self.base_addr + GpioMemMap::GPPUD as u32, 0x00000000);
+        delay(150);
  
-unsafe fn uart_getc() -> u8 {
-    // Wait for UART to have recieved something.
-    while mmio_read(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_FR)) & (1 << 4) != 0 {
+        // Write a zero to GPPUDCLK0 to make it take effect.
+        mmio_write(self.base_addr + GpioMemMap::GPPUDCLK0 as u32, 0x00000000);
     }
-    return mmio_read(toAddr!(MemMap::UART0_BASE, UartMemMap::UART0_DR)) as u8;
+
+    unsafe fn config_uart0(&self) {
+        mmio_write(self.base_addr + GpioMemMap::GPPUDCLK0 as u32,
+                   (1 << 14) | (1 << 15));
+        delay(150);
+ 
+        // Write a zero to GPPUDCLK0 to make it take effect.
+        mmio_write(self.base_addr + GpioMemMap::GPPUDCLK0 as u32, 0x00000000);
+    }
 }
 
-use core::str::StrExt;
-unsafe fn uart_puts(str: &str)
-{
-    for b in str.as_bytes() {
-        uart_putc(*b);
+/****************************************************************************
+ * UART - Universal Asynchronous Recever / Transmitter
+ ***************************************************************************/
+
+// The offsets for reach register for the UART. Not all the registers
+// are used.
+#[allow(dead_code)]
+enum UartMemMap {
+    DR      = 0x00,
+    RSRECR  = 0x04,
+    FR      = 0x18,
+    ILPR    = 0x20,
+    IBRD    = 0x24,
+    FBRD    = 0x28,
+    LCRH    = 0x2C,
+    CR      = 0x30,
+    IFLS    = 0x34,
+    IMSC    = 0x38,
+    RIS     = 0x3C,
+    MIS     = 0x40,
+    ICR     = 0x44,
+    DMACR   = 0x48,
+    ITCR    = 0x80,
+    ITIP    = 0x84,
+    ITOP    = 0x88,
+    TDR     = 0x8C,
+}
+
+struct Uart {
+    base_addr: u32,
+}
+
+impl Uart {
+
+    unsafe fn disable(&self) {
+        // Disable UART.
+        mmio_write(self.base_addr + UartMemMap::CR as u32, 0x00000000);
+    }
+
+    unsafe fn init(&self) {
+        // Clear pending interrupts.
+        mmio_write(self.base_addr + UartMemMap::ICR as u32, 0x7FF);
+ 
+        // Set integer & fractional part of baud rate.
+        // Divider = UART_CLOCK/(16 * Baud)
+        // Fraction part register = (Fractional part * 64) + 0.5
+        // UART_CLOCK = 3000000; Baud = 115200.
+ 
+        // Divider = 3000000 / (16 * 115200) = 1.627 = ~1.
+        // Fractional part register = (.627 * 64) + 0.5 = 40.6 = ~40.
+        mmio_write(self.base_addr + UartMemMap::IBRD as u32, 1);
+        mmio_write(self.base_addr + UartMemMap::FBRD as u32, 40);
+ 
+        // Enable FIFO & 8 bit data transmissio (1 stop bit, no parity).
+        mmio_write(self.base_addr + UartMemMap::LCRH as u32,
+                   (1 << 4) | (1 << 5) | (1 << 6));
+ 
+        // Mask all interrupts.
+        mmio_write(self.base_addr + UartMemMap::IMSC as u32,
+                   (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) |
+                   (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10));
+ 
+        // Enable UART, receive & transfer part of UART.
+        mmio_write(self.base_addr + UartMemMap::CR as u32,
+                   (1 << 0) | (1 << 8) | (1 << 9));
+    }
+
+    unsafe fn putc(&self, byte: u8) {
+        // Wait for UART to become ready to transmit.
+        while mmio_read(self.base_addr + UartMemMap::FR as u32) &
+                                                             (1 << 5) != 0 {
+        }
+        mmio_write(self.base_addr + UartMemMap::DR as u32,
+                   byte as u32);
+    }
+ 
+    unsafe fn getc(&self) -> u8 {
+        // Wait for UART to have recieved something.
+        while mmio_read(self.base_addr + UartMemMap::FR as u32) & (1 << 4) != 0 {
+        }
+        return mmio_read(self.base_addr + UartMemMap::DR as u32) as u8;
+    }
+
+    unsafe fn puts(&self, str: &str)
+    {
+        for b in str.as_bytes() {
+            self.putc(*b);
+        }
     }
 }
  
@@ -223,17 +236,23 @@ unsafe fn uart_puts(str: &str)
 #[no_mangle]
 pub fn kernel() -> () {
 
+    let uart0 = Uart{base_addr: MemMap::Uart0Base as u32};
+    let gpio = Gpio{base_addr: MemMap::GpioBase as u32};
+
     unsafe {
-        uart_init();
+        gpio.init();
+        uart0.disable();
+        gpio.config_uart0();
+        uart0.init();
     }
 
     unsafe {
-        uart_puts("Hello, Rusty Raspberry Pi world!\r\n");
+        uart0.puts("Hello, Rusty Raspberry Pi world!\r\n");
     }
 
     loop {
         unsafe {
-            uart_putc(uart_getc());
+            uart0.putc(uart0.getc());
         }
     }
 }
