@@ -16,40 +16,40 @@
 #![feature(lang_items)]
 
 extern crate core;
+use core::intrinsics;
 
 #[lang="stack_exhausted"]
 extern fn stack_exhausted() {
     unsafe {
-        asm!("1: b 1b\n" :::: "volatile");
+        intrinsics::breakpoint();
     }
 }
 
 #[lang="eh_personality"]
 extern fn eh_personality() {
     unsafe {
-        asm!("1: b 1b\n" :::: "volatile");
+        intrinsics::breakpoint();
     }
 }
 
 #[lang="panic_fmt"]
 pub fn panic_fmt(_fmt: &core::fmt::Arguments, _file_line: &(&'static str, usize)) -> ! {
     // The rust compiler wants an infinite loop, but doesn't realize
-    // our asm!() is one.
-    loop {
-        unsafe {
-            asm!("1: b 1b\n" :::: "volatile");
-        }
+    // our breakpoing is one.
+    unsafe {
+        intrinsics::breakpoint();
     }
+    loop {}
 }
 
 #[no_mangle]
 pub unsafe fn __aeabi_unwind_cpp_pr0() -> () {
-    asm!("1: b 1b\n" :::: "volatile");
+    intrinsics::breakpoint();
 }
 
 #[no_mangle]
 pub unsafe fn __aeabi_unwind_cpp_pr1() -> () {
-    asm!("1: b 1b\n" :::: "volatile");
+    intrinsics::breakpoint();
 }
 
 use core::str::StrExt;
@@ -68,7 +68,8 @@ enum MemMap {
  * Some utility functions to make the compiler do what needs to be done.
  ***************************************************************************/
 
-// Loop <delay> times, marked "volatile" for the optimizer.
+// Loop <delay> times, using "volatile" to prevent the optimizer from
+// optimizing it to nothing.
 fn delay(count: i32) -> () {
     unsafe {
         asm!("1: subs $0, $0, #1; bne 1b\n"
