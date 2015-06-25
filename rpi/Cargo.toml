@@ -1,0 +1,4 @@
+[package]
+name = "rpi"
+version = "0.1.0"
+authors = ["Gerald Van Baren <gvb@unssw.com>"]
