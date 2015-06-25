@@ -68,6 +68,8 @@ enum MemMap {
  * Some utility functions to make the compiler do what needs to be done.
  ***************************************************************************/
 
+use core::intrinsics;
+
 // Loop <delay> times, marked "volatile" for the optimizer.
 fn delay(count: i32) -> () {
     unsafe {
@@ -81,24 +83,12 @@ fn delay(count: i32) -> () {
 
 // Memory write marked "volatile" for the optimizer.
 unsafe fn mmio_write(reg: u32, data: u32) -> () {
-    asm!("str $1, [$0]\n"
-         :
-         : "r"(reg), "r"(data)
-         :
-         : "volatile");
-//  *(reg as *mut u32) = data as u32;
+    intrinsics::volatile_store(reg as *mut u32, data);
 }
  
 // Memory read marked "volatile" for the optimizer.
 unsafe fn mmio_read(reg: u32) -> u32 {
-    let mut data: u32;
-    asm!("ldr $0, [$1]\n"
-         : "=r"(data)
-         : "r"(reg)
-         :
-         : "volatile");
-    data
-//  *(reg as *mut u32)
+    intrinsics::volatile_load(reg as *const u32) as u32
 }
  
 /****************************************************************************
