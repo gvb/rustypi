@@ -3,6 +3,7 @@
 #![feature(asm)]
 #![no_std]
 #![crate_type="staticlib"]
+#![feature(core_intrinsics)]
 
 // rustc -C opt-level=2 -Z no-landing-pads --target arm-none-eabi -g --emit obj -L libcore-armm  -o my_rust_file.o my_rust_file.rs
 

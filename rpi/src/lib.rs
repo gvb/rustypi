@@ -4,6 +4,8 @@
 #![no_std]
 #![crate_type="staticlib"]
 #![crate_name = "rpi"]
+#![feature(core_str_ext)]
+#![feature(core_intrinsics)]
 
 extern crate core;
 use core::str::StrExt;
@@ -174,8 +176,8 @@ impl Uart {
 
     pub fn puts(&self, str: &str)
     {
-        for b in str.as_bytes() {
-            self.putc(*b);
+        for b in str.bytes() {
+            self.putc(b);
         }
     }
 }
