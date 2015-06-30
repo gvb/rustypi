@@ -40,16 +40,16 @@ mod mmio {
     use core::intrinsics;
 
     // Memory write marked "volatile" for the optimizer.
-    pub fn write(reg: u32, data: u32) -> () {
+    pub fn write(reg: usize, data: usize) -> () {
         unsafe {
-            intrinsics::volatile_store(reg as *mut u32, data);
+            intrinsics::volatile_store(reg as *mut usize, data);
         }
     }
  
     // Memory read marked "volatile" for the optimizer.
-    pub fn read(reg: u32) -> u32 {
+    pub fn read(reg: usize) -> usize {
         unsafe {
-            intrinsics::volatile_load(reg as *const u32) as u32
+            intrinsics::volatile_load(reg as *const usize) as usize
         }
     }
 }
@@ -67,27 +67,27 @@ enum GpioMemMap {
 }
  
 pub struct Gpio {
-    pub base_addr: u32
+    pub base_addr: usize
 }
 
 impl Gpio {
 
     // TODO: Verify operation and comment
     pub fn init(&self) {
-        mmio::write(self.base_addr + GpioMemMap::GPPUD as u32, 0x00000000);
+        mmio::write(self.base_addr + GpioMemMap::GPPUD as usize, 0x00000000);
         delay(150);
  
         // Write a zero to GPPUDCLK0 to make it take effect.
-        mmio::write(self.base_addr + GpioMemMap::GPPUDCLK0 as u32, 0x00000000);
+        mmio::write(self.base_addr + GpioMemMap::GPPUDCLK0 as usize, 0x00000000);
     }
 
     pub fn config_uart0(&self) {
-        mmio::write(self.base_addr + GpioMemMap::GPPUDCLK0 as u32,
+        mmio::write(self.base_addr + GpioMemMap::GPPUDCLK0 as usize,
                    (1 << 14) | (1 << 15));
         delay(150);
  
         // Write a zero to GPPUDCLK0 to make it take effect.
-        mmio::write(self.base_addr + GpioMemMap::GPPUDCLK0 as u32, 0x00000000);
+        mmio::write(self.base_addr + GpioMemMap::GPPUDCLK0 as usize, 0x00000000);
     }
 }
 
@@ -120,19 +120,19 @@ enum UartMemMap {
 }
 
 pub struct Uart {
-    pub base_addr: u32,
+    pub base_addr: usize,
 }
 
 impl Uart {
 
     pub fn disable(&self) {
         // Disable UART.
-        mmio::write(self.base_addr + UartMemMap::CR as u32, 0x00000000);
+        mmio::write(self.base_addr + UartMemMap::CR as usize, 0x00000000);
     }
 
     pub fn init(&self) {
         // Clear pending interrupts.
-        mmio::write(self.base_addr + UartMemMap::ICR as u32, 0x7FF);
+        mmio::write(self.base_addr + UartMemMap::ICR as usize, 0x7FF);
  
         // Set integer & fractional part of baud rate.
         // Divider = UART_CLOCK/(16 * Baud)
@@ -141,37 +141,37 @@ impl Uart {
  
         // Divider = 3000000 / (16 * 115200) = 1.627 = ~1.
         // Fractional part register = (.627 * 64) + 0.5 = 40.6 = ~40.
-        mmio::write(self.base_addr + UartMemMap::IBRD as u32, 1);
-        mmio::write(self.base_addr + UartMemMap::FBRD as u32, 40);
+        mmio::write(self.base_addr + UartMemMap::IBRD as usize, 1);
+        mmio::write(self.base_addr + UartMemMap::FBRD as usize, 40);
  
         // Enable FIFO & 8 bit data transmissio (1 stop bit, no parity).
-        mmio::write(self.base_addr + UartMemMap::LCRH as u32,
+        mmio::write(self.base_addr + UartMemMap::LCRH as usize,
                    (1 << 4) | (1 << 5) | (1 << 6));
  
         // Mask all interrupts.
-        mmio::write(self.base_addr + UartMemMap::IMSC as u32,
+        mmio::write(self.base_addr + UartMemMap::IMSC as usize,
                    (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) |
                    (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10));
  
         // Enable UART, receive & transfer part of UART.
-        mmio::write(self.base_addr + UartMemMap::CR as u32,
+        mmio::write(self.base_addr + UartMemMap::CR as usize,
                    (1 << 0) | (1 << 8) | (1 << 9));
     }
 
     pub fn putc(&self, byte: u8) {
         // Wait for UART to become ready to transmit.
-        while mmio::read(self.base_addr + UartMemMap::FR as u32) &
+        while mmio::read(self.base_addr + UartMemMap::FR as usize) &
                                                              (1 << 5) != 0 {
         }
-        mmio::write(self.base_addr + UartMemMap::DR as u32,
-                   byte as u32);
+        mmio::write(self.base_addr + UartMemMap::DR as usize,
+                   byte as usize);
     }
  
     pub fn getc(&self) -> u8 {
         // Wait for UART to have recieved something.
-        while mmio::read(self.base_addr + UartMemMap::FR as u32) & (1 << 4) != 0 {
+        while mmio::read(self.base_addr + UartMemMap::FR as usize) & (1 << 4) != 0 {
         }
-        return mmio::read(self.base_addr + UartMemMap::DR as u32) as u8;
+        return mmio::read(self.base_addr + UartMemMap::DR as usize) as u8;
     }
 
     pub fn puts(&self, str: &str)

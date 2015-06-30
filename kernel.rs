@@ -65,8 +65,8 @@ pub unsafe fn __aeabi_unwind_cpp_pr1() -> () {
 #[no_mangle]
 pub fn kernel() -> () {
 
-    let uart0 = Uart{base_addr: MemMap::Uart0Base as u32};
-    let gpio = Gpio{base_addr: MemMap::GpioBase as u32};
+    let uart0 = Uart{base_addr: MemMap::Uart0Base as usize};
+    let gpio = Gpio{base_addr: MemMap::GpioBase as usize};
 
     gpio.init();
     uart0.disable();
