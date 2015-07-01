@@ -28,7 +28,10 @@ pub enum MemMap {
 // optimizing it to nothing.
 fn delay(count: usize) -> () {
     unsafe {
-        asm!("push {$0}; 1: subs $0, $0, #1; bne 1b; pop {$0}\n"
+        asm!("push {$0};
+              1: subs $0, $0, #1;
+              bne 1b;
+              pop {$0}\n"
              :
              : "r"(count)
              : "cc"
