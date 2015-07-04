@@ -21,7 +21,9 @@ use core::intrinsics;
 extern crate rpi;
 
 // Our target hardware
-use rpi::*;
+use rpi::memory_map;
+use rpi::gpio;
+use rpi::uart;
 
 #[lang="stack_exhausted"]
 extern fn stack_exhausted() {
@@ -65,8 +67,8 @@ pub unsafe fn __aeabi_unwind_cpp_pr1() -> () {
 #[no_mangle]
 pub fn kernel() -> () {
 
-    let uart0 = Uart{base_addr: MemMap::Uart0Base as usize};
-    let gpio = Gpio{base_addr: MemMap::GpioBase as usize};
+    let uart0 = uart::Uart{base_addr: memory_map::UART0BASE};
+    let gpio = gpio::Gpio{base_addr: memory_map::GPIOBASE};
 
     gpio.init();
     uart0.disable();
