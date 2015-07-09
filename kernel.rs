@@ -67,17 +67,28 @@ pub unsafe fn __aeabi_unwind_cpp_pr1() -> () {
 #[no_mangle]
 pub fn kernel() -> () {
 
+    const STATUS_LED: usize = 16;
+
     let uart0 = uart::Uart{base_addr: memory_map::UART0BASE};
     let gpio = gpio::Gpio{base_addr: memory_map::GPIOBASE};
 
     gpio.init();
+
+    // Disable the pullup/down on the status LED pin
+    gpio.config_pull_up_down(STATUS_LED, gpio::GpioPullUpDown::Off);
+    // Configure for output
+    gpio.config_function(STATUS_LED, gpio::GpioFunctionSelect::Output);
+
     uart0.disable();
     gpio.config_uart0();
     uart0.init();
 
+    gpio.set(STATUS_LED);
     uart0.puts("Hello, Rusty Raspberry Pi world!\r\n");
+    gpio.clear(STATUS_LED);
 
     loop {
         uart0.putc(uart0.getc());
+        gpio.set_to(STATUS_LED, !gpio.get(STATUS_LED));
     }
 }

@@ -84,14 +84,14 @@ pub mod gpio {
     const GPFSEL5: usize = 0x14;
 
     // Pin control (set/clear/level)
-//  const GPSET0: usize = 0x1C;
-//  const GPSET1: usize = 0x20;
+    const GPSET0: usize = 0x1C;
+    const GPSET1: usize = 0x20;
 
-//  const GPCLR0: usize = 0x28;
-//  const GPCLR1: usize = 0x2C;
+    const GPCLR0: usize = 0x28;
+    const GPCLR1: usize = 0x2C;
 
-//  const GPLEV0: usize = 0x34;
-//  const GPLEV1: usize = 0x38;
+    const GPLEV0: usize = 0x34;
+    const GPLEV1: usize = 0x38;
 
     // Event detect status
 //  const GPEDS0: usize = 0x40;
@@ -207,16 +207,57 @@ pub mod gpio {
                 // TODO: Flag this as an error, probably with a panic.
                 _ => (0,0)
             };
-            mmio::write(reg, (mmio::read(reg) & 0b111 << (adjpin * 3)) |
-                             (config as usize) << (adjpin * 3));
+            mmio::write(reg, (mmio::read(reg) & (0b111 << (adjpin * 3))) |
+                             ((config as usize) << (adjpin * 3)));
         }
 
         pub fn config_uart0(&self) {
             // Disable the pullup/down on the UART pins
             self.config_pull_up_down(14, GpioPullUpDown::Off);
             self.config_pull_up_down(15, GpioPullUpDown::Off);
+            // Configure the proper function
 //          self.config_function(14, GpioFunctionSelect::Alt0);
 //          self.config_function(15, GpioFunctionSelect::Alt0);
+        }
+
+        pub fn get(&self, pin: usize) -> bool {
+            match pin {
+                0 ... 31 =>
+                    (mmio::read(self.base_addr + GPLEV0) &
+                        1 << pin) != 0,
+                32 ... 53 =>
+                    (mmio::read(self.base_addr + GPLEV1) &
+                        1 << (pin - 32)) != 0,
+                _ => false
+            }
+        }
+
+        pub fn set(&self, pin: usize) {
+            match pin {
+                0 ... 31 =>
+                    mmio::write(self.base_addr + GPSET0, 1 << pin),
+                32 ... 53 =>
+                    mmio::write(self.base_addr + GPSET1, 1 << (pin - 32)),
+                _ => {}
+            }
+        }
+
+        pub fn clear(&self, pin: usize) {
+            match pin {
+                0 ... 31 =>
+                    mmio::write(self.base_addr + GPCLR0, 1 << pin),
+                32 ... 53 =>
+                    mmio::write(self.base_addr + GPCLR1, 1 << (pin - 32)),
+                _ => {}
+            }
+        }
+
+        pub fn set_to(&self, pin: usize, value: bool) {
+            if value {
+                self.set(pin);
+            } else {
+                self.clear(pin);
+            }
         }
     }
 }
