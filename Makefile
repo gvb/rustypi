@@ -22,12 +22,17 @@ RLFLAGS=-C opt-level=2 -Z no-landing-pads --target $(MACHINE)-none-eabi -g --cra
 all :  kernel.img
 
 clean :
-	rm -f *.o *.elf *.img librpi-$(MACHINE)/*.rlib
+	rm -f *.o *.elf *.img \
+	rm -f lib-$(MACHINE)/*
 
 distclean : clean
-	rm -f libcore-$(MACHINE)/*
 
+# Start up code
 start.o : start.S
+	$(CC) $(SFLAGS) -c $^ -o $@
+
+# CPU utilities, ARM (not Thumb) code
+cpu.o : cpu.S
 	$(CC) $(SFLAGS) -c $^ -o $@
 
 # C kernel
@@ -35,25 +40,25 @@ ckernel.o : ckernel.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
 # Pure Rust kernel
-kernel.o : kernel.rs libcore-$(MACHINE)/libcore.rlib librpi-$(MACHINE)/librpi.rlib
-	$(RUST) $(RFLAGS) \
-		-L libcore-$(MACHINE) \
-		-L librpi-$(MACHINE) \
-		-o $@ $<
+kernel.o : kernel.rs \
+		lib-$(MACHINE)/libcore.rlib \
+		lib-$(MACHINE)/librpi.rlib
+	$(RUST) $(RFLAGS) -L lib-$(MACHINE) -o $@ $<
 
 # Target hardware library
-librpi-$(MACHINE)/librpi.rlib : rpi/src/lib.rs \
-			$(wildcard rpi/src/*.rs)
-	$(RUST) $(RLFLAGS) \
-		-L libcore-$(MACHINE) \
-		--out-dir librpi-$(MACHINE) $<
+lib-$(MACHINE)/librpi.rlib : rpi/src/lib.rs \
+		lib-$(MACHINE)/libcore.rlib \
+		cpu.o
+	$(RUST) $(RLFLAGS) -L lib-$(MACHINE) --out-dir lib-$(MACHINE) $<
 
 # Rust library
-libcore-$(MACHINE)/libcore.rlib : $(RUSTLIBSRC)/libcore/lib.rs \
+lib-$(MACHINE)/libcore.rlib : $(RUSTLIBSRC)/libcore/lib.rs \
 			$(wildcard $(RUSTLIBSRC)/*/*.rs)
-	$(RUST) $(RLFLAGS) --out-dir libcore-$(MACHINE) $<
+	$(RUST) $(RLFLAGS) --out-dir lib-$(MACHINE) $<
 
-kernel.elf : start.o kernel.o librpi-$(MACHINE)/librpi.rlib
+kernel.elf : start.o kernel.o \
+		lib-$(MACHINE)/librpi.rlib \
+		cpu.o
 	$(CC) -T rpi.ld -o $@ -ffreestanding -nostdlib $^
 
 kernel.img : kernel.elf

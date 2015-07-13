@@ -1,6 +1,6 @@
 //
 // To compile:
-//   arm-none-eabi-gcc -mcpu=arm1176jzf-s -fpic -ffreestanding -c boot.S -o boot.o
+//   arm-none-eabi-gcc -mcpu=arm1176jzf-s -fpic -ffreestanding -c start.S -o start.o
 //
 // Place in the boot section
 .section ".text.boot"
@@ -43,3 +43,8 @@ _start:
 halt:
 	wfe
 	b halt
+
+//dmb:
+//	movs r1,#0
+//	mcr p15,0,r1,c7,c10,4
+//	bx lr

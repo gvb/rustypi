@@ -24,9 +24,9 @@ pub mod memory_map {
  * CPU utilities
  ***************************************************************************/
 
-//pub mod cpu_util;
+pub mod cpu {
+    use core::intrinsics;
 
-pub mod cpu_util {
     // Loop <delay> times, using "volatile" to prevent the optimizer from
     // optimizing it to nothing.
     pub fn delay(count: usize) -> () {
@@ -41,6 +41,54 @@ pub mod cpu_util {
                  : "volatile");
         }
     }
+
+//  // Data Memory Barrier on ARMv6
+//  llvm!(extern {
+//      ir "declare dmb @llvm.dmb(i32)";
+//
+//      fn dmb(option: i32) {
+//          "call i64 @llvm.dbm(option)"
+//      }
+//  });
+
+//  pub fn dmb() {
+//      unsafe {
+//          intrinsics::atomic_fence();
+//      }
+//  }
+
+
+    // Calls out to ARM (not Thumb) dmb() function
+#[link(name = "dmb")]
+    extern {
+        pub fn dmb();
+    }
+
+//#[link_name = "llvm.arm.dsb"]
+//  extern {
+//      pub fn dmb(a: i32) -> ();
+//      // The `llvm.arm.dsb` intrinsic; known as `__builtin_arm_dsb` in GCC.
+//  }
+
+    // Data Memory Barrier on ARMv6
+//  pub fn dmb() {
+//      unsafe {
+//          // ee071f9a 	mcr	15, 0, r1, cr7, cr10, {4}
+//          asm!("push {r0, r1}
+//               movs r1,#0
+//               ldr r0, 2f
+//               bx r0
+//               .align 2
+//               .arm
+//               1: .word 0xee071f9a
+//               pop {r0, r1}
+//               bx lr
+//               2: .word 1b
+//               .thumb
+//               "
+//               ::: "cc" : "volatile");
+//      }
+//  }
 }
 /****************************************************************************
  * MMIO - Memory Mapped Input / Output utility
@@ -163,11 +211,14 @@ pub mod gpio {
         pub fn config_pull_up_down(&self, pin: usize, config: GpioPullUpDown) {
             // Ref: BCM2834 ARM Peripherals manual, page 95
 
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
             // Configure the control: off/pulldown/pullup
             mmio::write(self.base_addr + GPPUD,
                         config as usize);
             // Required setup time
-            cpu_util::delay(150);
+            cpu::delay(150);
             // Clock the appropriate pin's clock
             match pin {
                 0 ... 31 =>
@@ -179,7 +230,7 @@ pub mod gpio {
                 _ => {}
             }
             // Required setup time
-            cpu_util::delay(150);
+            cpu::delay(150);
             // Write to the clock register
             match pin {
                 0 ... 31 =>
@@ -188,6 +239,9 @@ pub mod gpio {
                     mmio::write(self.base_addr + GPPUDCLK1, 0),
                 _ => {}
             }
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
         }
 
         pub fn config_function(&self, pin: usize, config: GpioFunctionSelect) {
@@ -207,8 +261,14 @@ pub mod gpio {
                 // TODO: Flag this as an error, probably with a panic.
                 _ => (0,0)
             };
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
             mmio::write(reg, (mmio::read(reg) & (0b111 << (adjpin * 3))) |
                              ((config as usize) << (adjpin * 3)));
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
         }
 
         pub fn config_uart0(&self) {
@@ -221,7 +281,12 @@ pub mod gpio {
         }
 
         pub fn get(&self, pin: usize) -> bool {
-            match pin {
+            let mut ret: bool;
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
+            ret = match pin {
                 0 ... 31 =>
                     (mmio::read(self.base_addr + GPLEV0) &
                         1 << pin) != 0,
@@ -229,10 +294,17 @@ pub mod gpio {
                     (mmio::read(self.base_addr + GPLEV1) &
                         1 << (pin - 32)) != 0,
                 _ => false
-            }
+            };
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+            ret
         }
 
         pub fn set(&self, pin: usize) {
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
             match pin {
                 0 ... 31 =>
                     mmio::write(self.base_addr + GPSET0, 1 << pin),
@@ -240,9 +312,15 @@ pub mod gpio {
                     mmio::write(self.base_addr + GPSET1, 1 << (pin - 32)),
                 _ => {}
             }
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
         }
 
         pub fn clear(&self, pin: usize) {
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
             match pin {
                 0 ... 31 =>
                     mmio::write(self.base_addr + GPCLR0, 1 << pin),
@@ -250,6 +328,9 @@ pub mod gpio {
                     mmio::write(self.base_addr + GPCLR1, 1 << (pin - 32)),
                 _ => {}
             }
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
         }
 
         pub fn set_to(&self, pin: usize, value: bool) {
@@ -299,11 +380,20 @@ pub mod uart {
     impl Uart {
 
         pub fn disable(&self) {
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
             // Disable UART.
             mmio::write(self.base_addr + CR as usize, 0x00000000);
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
         }
 
         pub fn init(&self) {
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
             // Clear pending interrupts.
             mmio::write(self.base_addr + ICR as usize, 0x07FF);
  
@@ -329,28 +419,65 @@ pub mod uart {
             // Enable UART, receive & transfer part of UART.
             mmio::write(self.base_addr + CR as usize,
                        (1 << 0) | (1 << 8) | (1 << 9));
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
         }
 
         pub fn putc(&self, byte: u8) {
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
             // Wait for UART to become ready to transmit.
             while mmio::read(self.base_addr + FR as usize) &
                                                                  (1 << 5) != 0 {
             }
             mmio::write(self.base_addr + DR as usize,
                        byte as usize);
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
         }
  
         pub fn getc(&self) -> u8 {
+            let mut ret: u8;
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+
             // Wait for UART to have recieved something.
             while mmio::read(self.base_addr + FR as usize) & (1 << 4) != 0 {
             }
-            return mmio::read(self.base_addr + DR as usize) as u8;
+            ret = mmio::read(self.base_addr + DR as usize) as u8;
+
+            // Data Memory Barrier
+            unsafe{ cpu::dmb(); }
+            ret
         }
 
         pub fn puts(&self, str: &str)
         {
             for b in str.bytes() {
                 self.putc(b);
+            }
+        }
+
+        pub fn puthex32(&self, data: u32) {
+            let mut d = data;
+            let mut hexdigit;
+            // Hex digits are not unicode so we can use u8
+            let mut str: [u8; 8] = [0x30; 8];
+
+            for j in 0..8 {
+                hexdigit = '0' as u8 + (d & 0x0F) as u8;
+                if hexdigit > '9' as u8 {
+                    hexdigit = hexdigit + ('a' as u8 - '9' as u8 - 1);
+                }
+                str[7 - j] = hexdigit;
+                d = d >> 4;
+            }
+            for j in 0..8 {
+                self.putc(str[j]);
             }
         }
     }
