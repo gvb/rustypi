@@ -9,6 +9,26 @@
 
 extern crate core;
 
+pub struct PutMem {
+    // Print the name string, (*address >> shift) & mask, term string
+    pub name: &'static str,
+    pub addr: usize,
+    pub shift: usize,
+    pub mask: usize,
+    pub term: &'static str,
+}
+
+// Print a hex representation for the given type.
+pub trait PutHex<T> {
+    fn puthex(&self, data: T);
+}
+
+// Print a string representation for the given type.
+pub trait PutS<T> {
+    fn puts(&self, data: T);
+}
+
+
 /****************************************************************************
  * Define the memory map
  ***************************************************************************/
@@ -104,7 +124,7 @@ pub mod mmio {
             intrinsics::volatile_store(reg as *mut usize, data);
         }
     }
- 
+
     // Memory read marked "volatile" for the optimizer.
     pub fn read(reg: usize) -> usize {
         unsafe {
@@ -170,7 +190,7 @@ pub mod gpio {
 
     // Pin pull-up/down enables
     const GPPUD: usize = 0x94;
- 
+
     // Pin pull-up/down enable clocks
     const GPPUDCLK0: usize = 0x98;
     const GPPUDCLK1: usize = 0x9C;
@@ -188,7 +208,7 @@ pub mod gpio {
         Alt4 = 3,
         Alt5 = 2,
     }
- 
+
     #[allow(dead_code)]
     pub enum GpioPullUpDown {
         // GPIO pin pullup/down disabled, pull up, pull down.
@@ -196,17 +216,9 @@ pub mod gpio {
         PullDown = 1,
         PullUp = 2,
     }
- 
+
     pub struct Gpio {
         pub base_addr: usize
-    }
-
-    #[allow(dead_code)]
-    struct MemDumpInfo {
-        addr: usize,
-        name: &'static str,
-        shift: usize,
-        mask: usize,
     }
 
     impl Gpio {
@@ -345,61 +357,66 @@ pub mod gpio {
         }
 
         pub fn dump_reg(&self, uart: &uart::Uart) {
-            let mem_dump: [MemDumpInfo; 8] = [
-                MemDumpInfo {
-                    addr: 0x20200000,
+            let mem_dump: [PutMem; 8] = [
+                PutMem {
                     name: "GPFSEL0 = ",
+                    addr: 0x20200000,
                     shift: 0,
-                    mask: 0xFFFFFFFF
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
                 },
-                MemDumpInfo {
-                    addr: 0x20200004,
+                PutMem {
                     name: "GPFSEL1 = ",
+                    addr: 0x20200004,
                     shift: 0,
-                    mask: 0xFFFFFFFF
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
                 },
-                MemDumpInfo {
-                    addr: 0x20200008,
+                PutMem {
                     name: "GPFSEL2 = ",
+                    addr: 0x20200008,
                     shift: 0,
-                    mask: 0xFFFFFFFF
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
                 },
-                MemDumpInfo {
-                    addr: 0x2020000C,
+                PutMem {
                     name: "GPFSEL3 = ",
+                    addr: 0x2020000C,
                     shift: 0,
-                    mask: 0xFFFFFFFF
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
                 },
-                MemDumpInfo {
-                    addr: 0x20200010,
+                PutMem {
                     name: "GPFSEL4 = ",
+                    addr: 0x20200010,
                     shift: 0,
-                    mask: 0xFFFFFFFF
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
                 },
-                MemDumpInfo {
-                    addr: 0x20200014,
+                PutMem {
                     name: "GPFSEL5 = ",
+                    addr: 0x20200014,
                     shift: 0,
-                    mask: 0xFFFFFFFF
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
                 },
-                MemDumpInfo {
-                    addr: 0x20200034,
+                PutMem {
                     name: "GPLEF0 = ",
+                    addr: 0x20200034,
                     shift: 0,
-                    mask: 0xFFFFFFFF
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
                 },
-                MemDumpInfo {
-                    addr: 0x20200038,
+                PutMem {
                     name: "GPLEF1 = ",
+                    addr: 0x20200038,
                     shift: 0,
-                    mask: 0xFFFFFFFF
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
                 },
             ];
-
             for loc in &mem_dump {
-                uart.puts(loc.name);
-                uart.puthexu32(mmio::read(loc.addr) as u32);
-                uart.puts("\r\n");
+                uart.puts(loc);
             }
         }
     }
@@ -455,26 +472,26 @@ pub mod uart {
 
             // Clear pending interrupts.
             mmio::write(self.base_addr + ICR as usize, 0x07FF);
- 
+
             // Set integer & fractional part of baud rate.
             // Divider = UART_CLOCK/(16 * Baud)
             // Fraction part register = (Fractional part * 64) + 0.5
             // UART_CLOCK = 3000000; Baud = 115200.
- 
+
             // Divider = 3000000 / (16 * 115200) = 1.627 = ~1.
             // Fractional part register = (.627 * 64) + 0.5 = 40.6 = ~40.
             mmio::write(self.base_addr + IBRD as usize, 1);
             mmio::write(self.base_addr + FBRD as usize, 40);
- 
+
             // Enable FIFO & 8 bit data transmission (1 stop bit, no parity).
             mmio::write(self.base_addr + LCRH as usize,
                        (1 << 4) | (1 << 5) | (1 << 6));
- 
+
             // Mask all interrupts.
             mmio::write(self.base_addr + IMSC as usize,
                        (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) |
                        (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10));
- 
+
             // Enable UART, receive & transfer part of UART.
             mmio::write(self.base_addr + CR as usize,
                        (1 << 0) | (1 << 8) | (1 << 9));
@@ -494,7 +511,7 @@ pub mod uart {
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
         }
- 
+
         pub fn getc(&self) -> u8 {
             let mut ret: u8;
 
@@ -508,42 +525,83 @@ pub mod uart {
             unsafe{ cpu::dmb(); } // Data Memory Barrier
             ret
         }
+    }
 
-        pub fn puts(&self, str: &str)
+    impl PutS<u8> for Uart {
+        fn puts(&self, data: u8) {
+            self.putc(data);
+        }
+    }
+
+    impl PutS<&'static str> for Uart {
+        fn puts(&self, data: &'static str)
         {
-            for b in str.bytes() {
+            for b in data.bytes() {
                 self.putc(b);
             }
         }
+    }
 
-        fn tohex(&self, data: u8) -> u8 {
-            match data & 0x0F {
+    impl<'a> PutS<&'a PutMem> for Uart {
+        fn puts(&self, data: &'a PutMem) {
+            self.puts(data.name);
+            self.puthex((mmio::read(data.addr) as u32
+                        >> data.shift) & data.mask as u32);
+            self.puts(data.term);
+        }
+    }
+    impl PutHex<u8> for Uart {
+        fn puthex(&self, data: u8) {
+            let udata = data >> 4 & 0x0F;
+            let ldata = data      & 0x0F;
+            self.putc(match udata {
                 0 ... 9 =>
-                    '0' as u8 + (data & 0x0F),
+                    '0' as u8 + udata,
                 10 ... 15 =>
-                    'A' as u8 + (data & 0x0F) - 10,
+                    'A' as u8 + udata - 10,
                 _ => '?' as u8
-            }
+            });
+            self.putc(match ldata {
+                0 ... 9 =>
+                    '0' as u8 + ldata,
+                10 ... 15 =>
+                    'A' as u8 + ldata - 10,
+                _ => '?' as u8
+            });
         }
+    }
 
-        fn puthex32n(&self, data: usize, cnt: u8) {
-            let hexdigit = self.tohex((data & 0x0F) as u8);
-            if cnt > 1 {
-                self.puthex32n(data >> 4, cnt - 1);
-            }
-            self.putc(hexdigit);
+    impl PutHex<u16> for Uart {
+        fn puthex(&self, data: u16) {
+            self.puthex(((data >> 8) & 0x00FF) as u8);
+            self.puthex( (data       & 0x00FF) as u8);
         }
+    }
 
-        pub fn puthexu8(&self, data: u8) {
-            self.puthex32n(data as usize, 2);
+    impl PutHex<u32> for Uart {
+        fn puthex(&self, data: u32) {
+            self.puthex(((data >> 16) & 0x0000FFFF) as u16);
+            self.puthex( (data        & 0x0000FFFF) as u16);
         }
+    }
 
-        pub fn puthexu16(&self, data: u16) {
-            self.puthex32n(data as usize, 4);
+    impl PutHex<i8> for Uart {
+        fn puthex(&self, data: i8) {
+            self.puthex(data as u8);
         }
+    }
 
-        pub fn puthexu32(&self, data: u32) {
-            self.puthex32n(data as usize, 8);
+    impl PutHex<i16> for Uart {
+        fn puthex(&self, data: i16) {
+            self.puthex(((data >> 8) & 0x00FF) as u8);
+            self.puthex( (data       & 0x00FF) as u8);
+        }
+    }
+
+    impl PutHex<i32> for Uart {
+        fn puthex(&self, data: i32) {
+            self.puthex(((data >> 16) & 0x0000FFFF) as u16);
+            self.puthex( (data        & 0x0000FFFF) as u16);
         }
     }
 }

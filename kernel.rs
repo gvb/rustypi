@@ -24,6 +24,8 @@ extern crate rpi;
 use rpi::memory_map;
 use rpi::gpio;
 use rpi::uart;
+use rpi::PutHex;
+use rpi::PutS;
 
 #[lang="stack_exhausted"]
 extern fn stack_exhausted() {
@@ -83,8 +85,8 @@ pub fn kernel() -> () {
     gpio.config_uart0();
     uart0.init();
 
-    uart0.puthexu32(0x01234567); uart0.puts(" ");
-    uart0.puthexu32(0x89abcdef); uart0.puts("\r\n");
+    uart0.puthex(0x01234567); uart0.puts(" ");
+    uart0.puthex(0x89abcdef as u32); uart0.puts("\r\n");
 
     gpio.dump_reg(&uart0);
 
