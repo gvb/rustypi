@@ -84,21 +84,10 @@ pub fn kernel() -> () {
     gpio.config_uart0();
     uart0.init();
 
-    uart0.puthex32(0x01234567); uart0.puts(" ");
-    uart0.puthex32(0x89abcdef); uart0.puts("\r\n");
-    uart0.puts("GPFSEL0 = ");
-    uart0.puthex32(mmio::read(0x7E200000) as u32);
-    uart0.puts("\r\nGPFSEL1 = ");
-    uart0.puthex32(mmio::read(0x7E200004) as u32);
-    uart0.puts("\r\nGPFSEL2 = ");
-    uart0.puthex32(mmio::read(0x7E200008) as u32);
-    uart0.puts("\r\nGPFSEL3 = ");
-    uart0.puthex32(mmio::read(0x7E20000C) as u32);
-    uart0.puts("\r\nGPFSEL4 = ");
-    uart0.puthex32(mmio::read(0x7E200010) as u32);
-    uart0.puts("\r\nGPFSEL5 = ");
-    uart0.puthex32(mmio::read(0x7E200014) as u32);
-    uart0.puts("\r\n");
+    uart0.puthexu32(0x01234567); uart0.puts(" ");
+    uart0.puthexu32(0x89abcdef); uart0.puts("\r\n");
+
+    gpio.dump_reg(&uart0);
 
     uart0.puts("Hello, Rusty Raspberry Pi world!\r\n");
 

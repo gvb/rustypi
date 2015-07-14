@@ -25,7 +25,6 @@ pub mod memory_map {
  ***************************************************************************/
 
 pub mod cpu {
-    use core::intrinsics;
 
     // Loop <delay> times, using "volatile" to prevent the optimizer from
     // optimizing it to nothing.
@@ -202,6 +201,13 @@ pub mod gpio {
         pub base_addr: usize
     }
 
+    struct MemDumpInfo {
+        addr: usize,
+        name: &'static str,
+        shift: usize,
+        mask: usize,
+    }
+
     impl Gpio {
 
         // TODO: Verify operation and comment
@@ -340,6 +346,53 @@ pub mod gpio {
                 self.clear(pin);
             }
         }
+
+        pub fn dump_reg(&self, uart: &uart::Uart) {
+            let mem_dump: [MemDumpInfo; 6] = [
+                MemDumpInfo {
+                    addr: 0x20200000,
+                    name: "GPFSEL0 = ",
+                    shift: 0,
+                    mask: 0xFFFFFFFF
+                },
+                MemDumpInfo {
+                    addr: 0x20200004,
+                    name: "GPFSEL1 = ",
+                    shift: 0,
+                    mask: 0xFFFFFFFF
+                },
+                MemDumpInfo {
+                    addr: 0x20200008,
+                    name: "GPFSEL2 = ",
+                    shift: 0,
+                    mask: 0xFFFFFFFF
+                },
+                MemDumpInfo {
+                    addr: 0x2020000C,
+                    name: "GPFSEL3 = ",
+                    shift: 0,
+                    mask: 0xFFFFFFFF
+                },
+                MemDumpInfo {
+                    addr: 0x20200010,
+                    name: "GPFSEL4 = ",
+                    shift: 0,
+                    mask: 0xFFFFFFFF
+                },
+                MemDumpInfo {
+                    addr: 0x20200014,
+                    name: "GPFSEL5 = ",
+                    shift: 0,
+                    mask: 0xFFFFFFFF
+                },
+            ];
+
+            for loc in &mem_dump {
+                uart.puts(loc.name);
+                uart.puthexu32(mmio::read(loc.addr) as u32);
+                uart.puts("\r\n");
+            }
+        }
     }
 }
 
@@ -462,23 +515,34 @@ pub mod uart {
             }
         }
 
-        pub fn puthex32(&self, data: u32) {
-            let mut d = data;
-            let mut hexdigit;
-            // Hex digits are not unicode so we can use u8
-            let mut str: [u8; 8] = [0x30; 8];
+        fn tohex(&self, data: u8) -> u8 {
+            match data & 0x0F {
+                0 ... 9 =>
+                    '0' as u8 + (data & 0x0F),
+                10 ... 15 =>
+                    'A' as u8 + (data & 0x0F) - 10,
+                _ => '?' as u8
+            }
+        }
 
-            for j in 0..8 {
-                hexdigit = '0' as u8 + (d & 0x0F) as u8;
-                if hexdigit > '9' as u8 {
-                    hexdigit = hexdigit + ('a' as u8 - '9' as u8 - 1);
-                }
-                str[7 - j] = hexdigit;
-                d = d >> 4;
+        fn puthex32n(&self, data: usize, cnt: u8) {
+            let hexdigit = self.tohex((data & 0x0F) as u8);
+            if cnt > 1 {
+                self.puthex32n(data >> 4, cnt - 1);
             }
-            for j in 0..8 {
-                self.putc(str[j]);
-            }
+            self.putc(hexdigit);
+        }
+
+        pub fn puthexu8(&self, data: u8) {
+            self.puthex32n(data as usize, 2);
+        }
+
+        pub fn puthexu16(&self, data: u16) {
+            self.puthex32n(data as usize, 4);
+        }
+
+        pub fn puthexu32(&self, data: u32) {
+            self.puthex32n(data as usize, 8);
         }
     }
 }

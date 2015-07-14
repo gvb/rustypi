@@ -19,3 +19,32 @@ dmb:
 	pop {r0}
 	bx lr
 2:	.word 1b
+	.thumb
+
+// Ref: http://infocenter.arm.com/help/topic/com.arm.doc.faqs/4972.html
+.globl __aeabi_memcpy
+__aeabi_memcpy:
+// This function is the same as ANSI C memcpy, except that the return
+// value is void.
+.globl __aeabi_memcpy4
+__aeabi_memcpy4:
+// This function is the same as __aeabi_memcpy; but may assume the
+// pointers are 4-byte aligned.
+.globl __aeabi_memcpy8
+__aeabi_memcpy8:
+// This function is the same as __aeabi_memcpy but may assume the pointers
+// are 8-byte aligned.
+	.thumb
+	push {r0}
+	ldr r0, 3f
+	bx r0
+	.arm
+	.align 2
+1:	pop {r0}
+2:	ldr r3, [r1], #4
+	str r3, [r0], #4
+	subs r2, r2, #4
+	bge 2b
+	bx lr
+3:	.word 1b
+	.thumb
