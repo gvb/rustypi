@@ -24,7 +24,6 @@ extern crate rpi;
 use rpi::memory_map;
 use rpi::gpio;
 use rpi::uart;
-use rpi::mmio;
 
 #[lang="stack_exhausted"]
 extern fn stack_exhausted() {
@@ -78,7 +77,7 @@ pub fn kernel() -> () {
     // Disable the pullup/down on the status LED pin
     gpio.config_pull_up_down(STATUS_LED, gpio::GpioPullUpDown::Off);
     // Configure for output
-//  gpio.config_function(STATUS_LED, gpio::GpioFunctionSelect::Output);
+    gpio.config_function(STATUS_LED, gpio::GpioFunctionSelect::Output);
 
     uart0.disable();
     gpio.config_uart0();
