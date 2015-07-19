@@ -38,6 +38,7 @@ pub trait PutS<T> {
 pub mod memory_map {
     pub const GPIOBASE:  usize = 0x20200000;
     pub const UART0BASE: usize = 0x20201000;
+    pub const TIMERBASE: usize = 0x2020B000;
 }
 
 /****************************************************************************
@@ -309,11 +310,11 @@ pub mod gpio {
             ret = match pin {
                 0 ... 31 =>
                     (mmio::read(self.base_addr + GPLEV0) &
-                        1 << pin) != 0,
+                        (1 << pin)) != 0,
                 32 ... 53 =>
                     (mmio::read(self.base_addr + GPLEV1) &
-                        1 << (pin - 32)) != 0,
-                _ => false
+                        (1 << (pin - 32))) != 0,
+                _ => false  // unreachable!()
             };
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
@@ -328,7 +329,7 @@ pub mod gpio {
                     mmio::write(self.base_addr + GPSET0, 1 << pin),
                 32 ... 53 =>
                     mmio::write(self.base_addr + GPSET1, 1 << (pin - 32)),
-                _ => {}
+                _ => {}  // unreachable!()
             }
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
@@ -401,14 +402,14 @@ pub mod gpio {
                     term: "\r\n",
                 },
                 PutMem {
-                    name: "GPLEF0 = ",
+                    name: "GPLEV0 = ",
                     addr: 0x20200034,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
-                    name: "GPLEF1 = ",
+                    name: "GPLEV1 = ",
                     addr: 0x20200038,
                     shift: 0,
                     mask: 0xFFFFFFFF,
@@ -432,7 +433,7 @@ pub mod uart {
     use core::str::StrExt;
     use super::*;
 
-    // The offsets for reach register for the UART.
+    // The offsets for the UART registers.
     const DR:       usize = 0x00;
 //  const RSRECR:   usize = 0x04;
     const FR:       usize = 0x18;
@@ -602,6 +603,111 @@ pub mod uart {
         fn puthex(&self, data: i32) {
             self.puthex(((data >> 16) & 0x0000FFFF) as u16);
             self.puthex( (data        & 0x0000FFFF) as u16);
+        }
+    }
+}
+
+/****************************************************************************
+ * Timer
+ ***************************************************************************/
+
+//pub mod timer;
+
+pub mod timer {
+    use super::*;
+
+    pub struct Timer{
+        pub base_addr: usize
+    }
+
+    // The offsets for timer registers
+    const LOAD:       usize = 0x400;
+    const VALUE:      usize = 0x404;  // Read only
+    const CONTROL:    usize = 0x408;
+    const IRQ:        usize = 0x40C;  // IRQ Clear/Ack (Write only)
+    const RAW_IRQ:    usize = 0x410;  // RAW IRQ (Read only)
+    const MASKED_IRQ: usize = 0x414;  // Masked IRQ (Read only)
+    const RELOAD:     usize = 0x418;
+    const PREDIV:     usize = 0x41C;  // Pre-divider (Not in a real 804)
+    const COUNTER:    usize = 0x420;  // Free running counter (Not in real 804)
+
+    impl Timer {
+        pub fn dump_reg(&self, uart: &uart::Uart) {
+            let mem_dump: [PutMem; 10] = [
+                PutMem {
+                    name: "LOAD = ",
+                    addr: 0x2020B400,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "VALUE = ",
+                    addr: 0x2020B404,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "CONTROL = ",
+                    addr: 0x2020B408,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "IRQ = ",
+                    addr: 0x2020B40C,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "RAW_IRQ = ",
+                    addr: 0x2020B410,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "MASKED_IRQ = ",
+                    addr: 0x2020B414,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "RELOAD = ",
+                    addr: 0x2020B418,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "PREDIV = ",
+                    addr: 0x2020B41C,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "Free-running counter = ",
+                    addr: 0x2020B424,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: " ",
+                },
+                PutMem {
+                    name: "",
+                    addr: 0x2020B420,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+            ];
+            for loc in &mem_dump {
+                uart.puts(loc);
+            }
         }
     }
 }

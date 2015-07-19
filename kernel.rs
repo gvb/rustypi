@@ -24,6 +24,7 @@ extern crate rpi;
 use rpi::memory_map;
 use rpi::gpio;
 use rpi::uart;
+use rpi::timer;
 use rpi::PutHex;
 use rpi::PutS;
 
@@ -71,8 +72,11 @@ pub fn kernel() -> () {
 
     const STATUS_LED: usize = 16;
 
+    let mut flash = true;
+
     let uart0 = uart::Uart{base_addr: memory_map::UART0BASE};
     let gpio = gpio::Gpio{base_addr: memory_map::GPIOBASE};
+    let timer = timer::Timer{base_addr: memory_map::TIMERBASE};
 
     gpio.init();
 
@@ -84,16 +88,28 @@ pub fn kernel() -> () {
     uart0.disable();
     gpio.config_uart0();
     uart0.init();
+    uart0.puts("\r\n"); // Start life on a new line.
 
     uart0.puthex(0x01234567); uart0.puts(" ");
     uart0.puthex(0x89abcdef as u32); uart0.puts("\r\n");
 
+    uart0.puts("---- GPIO ----\r\n");
     gpio.dump_reg(&uart0);
 
-    uart0.puts("Hello, Rusty Raspberry Pi world!\r\n");
+    uart0.puts("---- Timer ----\r\n");
+    timer.dump_reg(&uart0);
+
+    uart0.puts("\r\nHello, Rusty Raspberry Pi world!\r\n");
 
     loop {
         uart0.putc(uart0.getc());
-        gpio.set_to(STATUS_LED, !gpio.get(STATUS_LED));
+        if gpio.get(STATUS_LED) {
+            uart0.putc('*' as u8);
+        } else {
+            uart0.putc('.' as u8);
+        }
+//      gpio.set_to(STATUS_LED, !gpio.get(STATUS_LED));
+        gpio.set_to(STATUS_LED, flash);
+        flash = !flash;
     }
 }
