@@ -35,16 +35,16 @@ __aeabi_memcpy8:
 // This function is the same as __aeabi_memcpy but may assume the pointers
 // are 8-byte aligned.
 	.thumb
-	push {r0}
-	ldr r0, 3f
-	bx r0
+	push {r3}
+	ldr r3, 2f
+	bx r3
 	.arm
 	.align 2
-1:	pop {r0}
-2:	ldr r3, [r1], #4
+1:	ldr r3, [r1], #4
 	str r3, [r0], #4
 	subs r2, r2, #4
-	bge 2b
+	bge 1b
+	pop {r3}
 	bx lr
-3:	.word 1b
+2:	.word 1b
 	.thumb
