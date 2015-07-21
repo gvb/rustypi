@@ -38,7 +38,8 @@ pub trait PutS<T> {
 pub mod memory_map {
     pub const GPIOBASE:  usize = 0x20200000;
     pub const UART0BASE: usize = 0x20201000;
-    pub const TIMERBASE: usize = 0x2020B000;
+    pub const SYSTEMTIMERBASE: usize = 0x20003000;
+    pub const TIMERBASE: usize = 0x2000B000;
 }
 
 /****************************************************************************
@@ -46,6 +47,8 @@ pub mod memory_map {
  ***************************************************************************/
 
 pub mod cpu {
+
+    pub const SYSTEM_CLOCK: usize = 250000000;  // System clock rate (Hz)
 
     // Loop <delay> times, using "volatile" to prevent the optimizer from
     // optimizing it to nothing.
@@ -62,54 +65,14 @@ pub mod cpu {
         }
     }
 
-//  // Data Memory Barrier on ARMv6
-//  llvm!(extern {
-//      ir "declare dmb @llvm.dmb(i32)";
-//
-//      fn dmb(option: i32) {
-//          "call i64 @llvm.dbm(option)"
-//      }
-//  });
-
-//  pub fn dmb() {
-//      unsafe {
-//          intrinsics::atomic_fence();
-//      }
-//  }
-
-
+    // Data Memory Barrier on ARMv6
     // Calls out to ARM (not Thumb) dmb() function
 #[link(name = "dmb")]
     extern {
         pub fn dmb();
     }
-
-//#[link_name = "llvm.arm.dsb"]
-//  extern {
-//      pub fn dmb(a: i32) -> ();
-//      // The `llvm.arm.dsb` intrinsic; known as `__builtin_arm_dsb` in GCC.
-//  }
-
-    // Data Memory Barrier on ARMv6
-//  pub fn dmb() {
-//      unsafe {
-//          // ee071f9a 	mcr	15, 0, r1, cr7, cr10, {4}
-//          asm!("push {r0, r1}
-//               movs r1,#0
-//               ldr r0, 2f
-//               bx r0
-//               .align 2
-//               .arm
-//               1: .word 0xee071f9a
-//               pop {r0, r1}
-//               bx lr
-//               2: .word 1b
-//               .thumb
-//               "
-//               ::: "cc" : "volatile");
-//      }
-//  }
 }
+
 /****************************************************************************
  * MMIO - Memory Mapped Input / Output utility
  ***************************************************************************/
@@ -462,8 +425,8 @@ pub mod uart {
         pub fn disable(&self) {
             unsafe{ cpu::dmb(); } // Data Memory Barrier
 
-            // Disable UART.
-            mmio::write(self.base_addr + CR as usize, 0x00000000);
+            // Disable the UART.
+            mmio::write(self.base_addr + CR, 0x00000000);
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
         }
@@ -472,7 +435,7 @@ pub mod uart {
             unsafe{ cpu::dmb(); } // Data Memory Barrier
 
             // Clear pending interrupts.
-            mmio::write(self.base_addr + ICR as usize, 0x07FF);
+            mmio::write(self.base_addr + ICR, 0x07FF);
 
             // Set integer & fractional part of baud rate.
             // Divider = UART_CLOCK/(16 * Baud)
@@ -481,20 +444,20 @@ pub mod uart {
 
             // Divider = 3000000 / (16 * 115200) = 1.627 = ~1.
             // Fractional part register = (.627 * 64) + 0.5 = 40.6 = ~40.
-            mmio::write(self.base_addr + IBRD as usize, 1);
-            mmio::write(self.base_addr + FBRD as usize, 40);
+            mmio::write(self.base_addr + IBRD, 1);
+            mmio::write(self.base_addr + FBRD, 40);
 
             // Enable FIFO & 8 bit data transmission (1 stop bit, no parity).
-            mmio::write(self.base_addr + LCRH as usize,
+            mmio::write(self.base_addr + LCRH,
                        (1 << 4) | (1 << 5) | (1 << 6));
 
             // Mask all interrupts.
-            mmio::write(self.base_addr + IMSC as usize,
+            mmio::write(self.base_addr + IMSC,
                        (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) |
                        (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10));
 
-            // Enable UART, receive & transfer part of UART.
-            mmio::write(self.base_addr + CR as usize,
+            // Enable the UART, receive & transfer part of the UART.
+            mmio::write(self.base_addr + CR,
                        (1 << 0) | (1 << 8) | (1 << 9));
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
@@ -503,12 +466,11 @@ pub mod uart {
         pub fn putc(&self, byte: u8) {
             unsafe{ cpu::dmb(); } // Data Memory Barrier
 
-            // Wait for UART to become ready to transmit.
-            while mmio::read(self.base_addr + FR as usize) &
+            // Wait for the UART to become ready to transmit.
+            while mmio::read(self.base_addr + FR) &
                                                                  (1 << 5) != 0 {
             }
-            mmio::write(self.base_addr + DR as usize,
-                       byte as usize);
+            mmio::write(self.base_addr + DR, byte as usize);
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
         }
@@ -518,10 +480,10 @@ pub mod uart {
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
 
-            // Wait for UART to have recieved something.
-            while mmio::read(self.base_addr + FR as usize) & (1 << 4) != 0 {
+            // Wait for the UART to have recieved something.
+            while mmio::read(self.base_addr + FR) & (1 << 4) != 0 {
             }
-            ret = mmio::read(self.base_addr + DR as usize) as u8;
+            ret = mmio::read(self.base_addr + DR) as u8;
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
             ret
@@ -534,8 +496,8 @@ pub mod uart {
         }
     }
 
-    impl PutS<&'static str> for Uart {
-        fn puts(&self, data: &'static str)
+    impl<'a> PutS<&'a str> for Uart {
+        fn puts(&self, data: &'a str)
         {
             for b in data.bytes() {
                 self.putc(b);
@@ -616,11 +578,121 @@ pub mod uart {
 pub mod timer {
     use super::*;
 
-    pub struct Timer{
+    pub struct SystemTimer {
         pub base_addr: usize
     }
 
-    // The offsets for timer registers
+    // The offsets for System Timer registers
+    const CS:         usize = 0x000;  // System Timer Control/Status
+    const CLO:        usize = 0x004;  // System Timer Counter Lower 32 bits
+    const CHI:        usize = 0x008;  // System Timer Counter Higher 32 bits
+    const C0:         usize = 0x00C;  // System Timer Compare 0
+    const C1:         usize = 0x010;  // System Timer Compare 1
+    const C2:         usize = 0x014;  // System Timer Compare 2
+    const C3:         usize = 0x018;  // System Timer Compare 3
+
+    impl SystemTimer {
+        pub fn disable(&self) {
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+
+            // Clear any pending interrupt
+            mmio::write(self.base_addr + CS, 0x0000000F);
+            // Set the match registers back to the power up values.
+            mmio::write(self.base_addr + C0, 0x00000000);
+            mmio::write(self.base_addr + C1, 0x00000000);
+            mmio::write(self.base_addr + C2, 0x00000000);
+            mmio::write(self.base_addr + C3, 0x00000000);
+
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+        }
+
+        pub fn init(&self) {
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+
+            // Clear pending interrupts.
+            mmio::write(self.base_addr + CS, 0x0000000F);
+            mmio::write(self.base_addr + IRQ, 1);
+
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+        }
+
+        pub fn dump_reg(&self, uart: &uart::Uart) {
+            let mem_dump: [PutMem; 9] = [
+                PutMem {
+                    name: "CS = ",
+                    addr: 0x20003000,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "CLO / CHI = ",
+                    addr: 0x20003004,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "",
+                },
+                PutMem {
+                    name: " ",
+                    addr: 0x20003008,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "C0 = ",
+                    addr: 0x2000300C,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "C1 = ",
+                    addr: 0x20003010,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "C2 = ",
+                    addr: 0x20003014,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "C3 = ",
+                    addr: 0x20003018,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "MASKED_IRQ = ",
+                    addr: 0x20003014,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+                PutMem {
+                    name: "RELOAD = ",
+                    addr: 0x20003018,
+                    shift: 0,
+                    mask: 0xFFFFFFFF,
+                    term: "\r\n",
+                },
+            ];
+            for loc in &mem_dump {
+                uart.puts(loc);
+            }
+        }
+    }
+
+    pub struct Timer {
+        pub base_addr: usize
+    }
+
+    // The offsets for 804(ish) timer registers
     const LOAD:       usize = 0x400;
     const VALUE:      usize = 0x404;  // Read only
     const CONTROL:    usize = 0x408;
@@ -632,74 +704,99 @@ pub mod timer {
     const COUNTER:    usize = 0x420;  // Free running counter (Not in real 804)
 
     impl Timer {
+        pub fn disable(&self) {
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+
+            // Reset back to default values, clear the IRQ.
+            mmio::write(self.base_addr + CONTROL, 0x003E0020);
+            mmio::write(self.base_addr + IRQ, 1);
+            mmio::write(self.base_addr + LOAD, 0xFFFFFFFF);
+
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+        }
+
+        pub fn init(&self, load: usize) {
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+
+            // Set the prescaler to give 1MHz clock from 250MHz System Clock
+            mmio::write(self.base_addr + PREDIV, 250 - 1);
+
+            mmio::write(self.base_addr + CONTROL,
+                ((250 - 1) << 16) |  // Pre-scaler to give 1MHz clock
+                (1 << 9) |           // Free running counter enabled
+                (1 << 8) |           // Stop the timer when halted
+                (1 << 7) |           // Timer enabled
+                (0 << 5) |           // Timer interrupt disabled
+                (0 << 3) |           // Prescale is clock / 1
+                (0 << 1)             // 16 bit counters
+            );
+
+            mmio::write(self.base_addr + LOAD, load);
+
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+        }
+
         pub fn dump_reg(&self, uart: &uart::Uart) {
-            let mem_dump: [PutMem; 10] = [
+            let mem_dump: [PutMem; 9] = [
                 PutMem {
                     name: "LOAD = ",
-                    addr: 0x2020B400,
+                    addr: 0x2000B400,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
                     name: "VALUE = ",
-                    addr: 0x2020B404,
+                    addr: 0x2000B404,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
                     name: "CONTROL = ",
-                    addr: 0x2020B408,
+                    addr: 0x2000B408,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
                     name: "IRQ = ",
-                    addr: 0x2020B40C,
+                    addr: 0x2000B40C,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
                     name: "RAW_IRQ = ",
-                    addr: 0x2020B410,
+                    addr: 0x2000B410,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
                     name: "MASKED_IRQ = ",
-                    addr: 0x2020B414,
+                    addr: 0x2000B414,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
                     name: "RELOAD = ",
-                    addr: 0x2020B418,
+                    addr: 0x2000B418,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
                     name: "PREDIV = ",
-                    addr: 0x2020B41C,
+                    addr: 0x2000B41C,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",
                 },
                 PutMem {
-                    name: "Free-running counter = ",
-                    addr: 0x2020B424,
-                    shift: 0,
-                    mask: 0xFFFFFFFF,
-                    term: " ",
-                },
-                PutMem {
-                    name: "",
-                    addr: 0x2020B420,
+                    name: "Counter = ",
+                    addr: 0x2000B420,
                     shift: 0,
                     mask: 0xFFFFFFFF,
                     term: "\r\n",

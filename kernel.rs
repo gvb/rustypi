@@ -77,6 +77,7 @@ pub fn kernel() -> () {
     let uart0 = uart::Uart{base_addr: memory_map::UART0BASE};
     let gpio = gpio::Gpio{base_addr: memory_map::GPIOBASE};
     let timer = timer::Timer{base_addr: memory_map::TIMERBASE};
+    let systimer = timer::SystemTimer{base_addr: memory_map::SYSTEMTIMERBASE};
 
     gpio.init();
 
@@ -96,7 +97,15 @@ pub fn kernel() -> () {
     uart0.puts("---- GPIO ----\r\n");
     gpio.dump_reg(&uart0);
 
-    uart0.puts("---- Timer ----\r\n");
+    uart0.puts("---- System Timer ----\r\n");
+    systimer.dump_reg(&uart0);
+
+    uart0.puts("---- Timer Reset ----\r\n");
+    timer.dump_reg(&uart0);
+
+    timer.init(0xFFFFFFFF);
+
+    uart0.puts("---- Timer Init ----\r\n");
     timer.dump_reg(&uart0);
 
     uart0.puts("\r\nHello, Rusty Raspberry Pi world!\r\n");
