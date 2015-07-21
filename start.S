@@ -43,8 +43,3 @@ _start:
 halt:
 	wfe
 	b halt
-
-//dmb:
-//	movs r1,#0
-//	mcr p15,0,r1,c7,c10,4
-//	bx lr
