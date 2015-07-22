@@ -110,15 +110,18 @@ pub fn kernel() -> () {
 
     uart0.puts("\r\nHello, Rusty Raspberry Pi world!\r\n");
 
+    let mut counter = timer.counter() as u32;
     loop {
-        uart0.putc(uart0.getc());
-        if gpio.get(STATUS_LED) {
-            uart0.putc('*' as u8);
-        } else {
-            uart0.putc('.' as u8);
+        if uart0.get_ready() {
+            uart0.putc(uart0.getc());
         }
-//      gpio.set_to(STATUS_LED, !gpio.get(STATUS_LED));
-        gpio.set_to(STATUS_LED, flash);
-        flash = !flash;
+        // Flash at 1Hz
+        if timer.counter() as u32 - counter > (1000000 / 2) {
+            gpio.set_to(STATUS_LED, flash);
+            flash = !flash;
+            // The obvious thing is to read the timer.counter(), but that
+            // would result in clock drift.
+            counter = counter + (1000000 / 2);
+        }
     }
 }

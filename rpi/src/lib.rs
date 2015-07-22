@@ -478,13 +478,20 @@ pub mod uart {
         pub fn getc(&self) -> u8 {
             let mut ret: u8;
 
-            unsafe{ cpu::dmb(); } // Data Memory Barrier
-
+            // NB: get_ready() does a Data Memory Barrier
             // Wait for the UART to have recieved something.
-            while mmio::read(self.base_addr + FR) & (1 << 4) != 0 {
+            while !self.get_ready() {
             }
             ret = mmio::read(self.base_addr + DR) as u8;
 
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+            ret
+        }
+
+        pub fn get_ready(&self) -> bool {
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+            // Bit 4 set indicates Rx FIFO empty (no data)
+            let ret = (mmio::read(self.base_addr + FR) & (1 << 4)) == 0;
             unsafe{ cpu::dmb(); } // Data Memory Barrier
             ret
         }
@@ -734,6 +741,13 @@ pub mod timer {
             mmio::write(self.base_addr + LOAD, load);
 
             unsafe{ cpu::dmb(); } // Data Memory Barrier
+        }
+
+        pub fn counter(&self) -> usize {
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+            let ret = mmio::read(self.base_addr + COUNTER);
+            unsafe{ cpu::dmb(); } // Data Memory Barrier
+            ret
         }
 
         pub fn dump_reg(&self, uart: &uart::Uart) {
