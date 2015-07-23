@@ -1,3 +1,9 @@
+//
+// Copyright (C) 2015
+// Gerald Van Baren, <gvb@unssw.com>
+// SPDX-License-Identifier:	LGPL-3.0
+//
+
 #![feature(no_std)]
 #![feature(core)]
 #![feature(asm)]

@@ -1,4 +1,8 @@
 //
+// Copyright (C) 2015
+// Gerald Van Baren, <gvb@unssw.com>
+// SPDX-License-Identifier:	LGPL-3.0
+//
 // To compile:
 //   arm-none-eabi-gcc -mcpu=arm1176jzf-s -fpic -ffreestanding -c start.S -o start.o
 //
