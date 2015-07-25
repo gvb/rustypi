@@ -26,29 +26,38 @@ dmb:
 	.thumb
 
 // Ref: http://infocenter.arm.com/help/topic/com.arm.doc.faqs/4972.html
-.globl __aeabi_memcpy
-__aeabi_memcpy:
 // This function is the same as ANSI C memcpy, except that the return
 // value is void.
-.globl __aeabi_memcpy4
-__aeabi_memcpy4:
-// This function is the same as __aeabi_memcpy; but may assume the
-// pointers are 4-byte aligned.
-.globl __aeabi_memcpy8
-__aeabi_memcpy8:
-// This function is the same as __aeabi_memcpy but may assume the pointers
-// are 8-byte aligned.
-	.thumb
+.globl __aeabi_memcpy
+__aeabi_memcpy:
 	push {r3}
-	ldr r3, 2f
-	bx r3
-	.arm
-	.align 2
-1:	ldr r3, [r1], #4
-	str r3, [r0], #4
-	subs r2, r2, #4
-	bge 1b
+	b 2f
+1:	ldrb r3, [r1]
+	strb r3, [r0]
+	add r0,#1
+	add r1,#1
+	sub r2, #1
+2:	cmp r2,#0
+	bgt 1b
 	pop {r3}
 	bx lr
-2:	.word 1b
-	.thumb
+
+// This function is the same as __aeabi_memcpy; but may assume the
+// pointers are 4-byte aligned.
+.globl __aeabi_memcpy4
+__aeabi_memcpy4:
+// This function is the same as __aeabi_memcpy but may assume the pointers
+// are 8-byte aligned.
+.globl __aeabi_memcpy8
+__aeabi_memcpy8:
+	push {r3}
+	b 2f
+1:	ldr r3, [r1]
+	str r3, [r0]
+	add r0,#4
+	add r1,#4
+	sub r2, #4
+2:	cmp r2,#0
+	bgt 1b
+	pop {r3}
+	bx lr
